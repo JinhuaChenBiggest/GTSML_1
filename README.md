@@ -127,9 +127,7 @@ For each view a kNN graph is built from cosine similarity: every node is linked
 to its $k$ nearest neighbors to form a binary adjacency $A^{(v)}$, which is then
 symmetrized, given self-loops, and symmetrically normalized:
 
-$$A \leftarrow \max(A, A^{\top}), \qquad \tilde{A} = A + I, \qquad
-\hat{A}^{(v)} = \tilde{D}^{-1/2}\,\tilde{A}\,\tilde{D}^{-1/2}, \qquad
-\tilde{D}_{ii} = \sum_{j}\tilde{A}_{ij}.$$
+$$A \leftarrow \max(A, A^{\top}), \qquad \tilde{A} = A + I, \qquad \hat{A}^{(v)} = \tilde{D}^{-1/2}\,\tilde{A}\,\tilde{D}^{-1/2}, \qquad \tilde{D}_{ii} = \sum_{j}\tilde{A}_{ij}.$$
 
 For native-graph datasets (Cora, CiteSeer), the citation adjacency stored in
 view 0 is used directly (normalized the same way) and shared by the remaining
@@ -140,28 +138,21 @@ feature views.
 Per view, a two-layer GCN runs over the full graph (all $N$ nodes, including
 unlabeled ones):
 
-$$H^{(v)} = \mathrm{ReLU}\!\big(\hat{A}^{(v)} X^{(v)} W_1^{(v)}\big), \qquad
-Z^{(v)} = \hat{A}^{(v)} H^{(v)} W_2^{(v)}.$$
+$$H^{(v)} = \mathrm{ReLU}\!\big(\hat{A}^{(v)} X^{(v)} W_1^{(v)}\big), \qquad Z^{(v)} = \hat{A}^{(v)} H^{(v)} W_2^{(v)}.$$
 
 Non-negative evidence and the Dirichlet parameters follow:
 
-$$e^{(v)} = \mathrm{softplus}(Z^{(v)}) \in \mathbb{R}_{\ge 0}^{N \times K},
-\qquad \alpha^{(v)} = e^{(v)} + 1.$$
+$$e^{(v)} = \mathrm{softplus}(Z^{(v)}) \in \mathbb{R}_{\ge 0}^{N \times K}, \qquad \alpha^{(v)} = e^{(v)} + 1.$$
 
 Each view yields a subjective opinion (belief masses and an uncertainty mass):
 
-$$S^{(v)} = \sum_{k=1}^{K}\alpha^{(v)}_k, \qquad
-b^{(v)}_k = \frac{e^{(v)}_k}{S^{(v)}}, \qquad
-u^{(v)} = \frac{K}{S^{(v)}}, \qquad
-\sum_{k} b^{(v)}_k + u^{(v)} = 1.$$
+$$S^{(v)} = \sum_{k=1}^{K}\alpha^{(v)}_k, \qquad b^{(v)}_k = \frac{e^{(v)}_k}{S^{(v)}}, \qquad u^{(v)} = \frac{K}{S^{(v)}}, \qquad \sum_{k} b^{(v)}_k + u^{(v)} = 1.$$
 
 ### 4. Multi-view fusion (Dempster-Shafer)
 
 Two opinions $(b^{1}, u^{1})$ and $(b^{2}, u^{2})$ are combined by
 
-$$C = \sum_{i \ne j} b^{1}_i\, b^{2}_j, \qquad
-b_k = \frac{1}{1-C}\big(b^{1}_k b^{2}_k + b^{1}_k u^{2} + b^{2}_k u^{1}\big),
-\qquad u = \frac{1}{1-C}\, u^{1} u^{2},$$
+$$C = \sum_{i \ne j} b^{1}_i\, b^{2}_j, \qquad b_k = \frac{1}{1-C}\big(b^{1}_k b^{2}_k + b^{1}_k u^{2} + b^{2}_k u^{1}\big), \qquad u = \frac{1}{1-C}\, u^{1} u^{2},$$
 
 where $C$ is the conflict coefficient. Applying this rule iteratively over all
 views gives a fused opinion, from which the fused Dirichlet is recovered:
@@ -173,21 +164,17 @@ $$S = \frac{K}{u}, \qquad \hat{e}_k = b_k\, S, \qquad \alpha^{a} = \hat{e} + 1.$
 For a node with one-hot label $\mathbf{y}$ and Dirichlet parameter $\alpha$, the
 EDL digamma cross-entropy and its annealed KL regularizer are
 
-$$\mathcal{L}_{\text{edl}}(\alpha, \mathbf{y}) =
-\sum_{k=1}^{K} y_k\big(\psi(S) - \psi(\alpha_k)\big), \qquad S = \sum_k \alpha_k,$$
+$$\mathcal{L}_{\text{edl}}(\alpha, \mathbf{y}) = \sum_{k=1}^{K} y_k\big(\psi(S) - \psi(\alpha_k)\big), \qquad S = \sum_k \alpha_k,$$
 
-$$\tilde{\alpha} = \mathbf{y} + (1 - \mathbf{y}) \odot \alpha, \qquad
-\mathcal{L}(\alpha, \mathbf{y}) = \mathcal{L}_{\text{edl}}(\alpha, \mathbf{y})
-+ \lambda_t \, \mathrm{KL}\!\big(\mathrm{Dir}(\tilde{\alpha}) \,\|\, \mathrm{Dir}(\mathbf{1})\big),
-\qquad \lambda_t = \min\!\big(1,\, t/T\big),$$
+$$\tilde{\alpha} = \mathbf{y} + (1 - \mathbf{y}) \odot \alpha$$
+
+$$\mathcal{L}(\alpha, \mathbf{y}) = \mathcal{L}_{\text{edl}}(\alpha, \mathbf{y}) + \lambda_t \, \mathrm{KL}\!\big(\mathrm{Dir}(\tilde{\alpha}) \,\|\, \mathrm{Dir}(\mathbf{1})\big), \qquad \lambda_t = \min\!\big(1,\, t/T\big),$$
 
 where $\psi$ is the digamma function, $t$ the current epoch and $T$ the
 annealing step. The total objective averages the fused term and the $V$
 per-view terms over the labeled set:
 
-$$\mathcal{L}_{\text{total}} = \frac{1}{|\mathcal{L}|}\sum_{i \in \mathcal{L}}
-\frac{1}{V+1}\Big(\mathcal{L}(\alpha^{a}_i, \mathbf{y}_i)
-+ \sum_{v=1}^{V} \mathcal{L}(\alpha^{(v)}_i, \mathbf{y}_i)\Big).$$
+$$\mathcal{L}_{\text{total}} = \frac{1}{|\mathcal{L}|}\sum_{i \in \mathcal{L}} \frac{1}{V+1}\Big(\mathcal{L}(\alpha^{a}_i, \mathbf{y}_i) + \sum_{v=1}^{V} \mathcal{L}(\alpha^{(v)}_i, \mathbf{y}_i)\Big).$$
 
 Even though the loss only touches labeled nodes, the full-graph GCN mixes
 features from unlabeled nodes into labeled-node representations, so unlabeled
@@ -200,9 +187,7 @@ The model outputs the fused Dirichlet $\alpha^{a} \in \mathbb{R}^{N \times K}$.
 The class probability is its mean and the predicted label is the argmax; the
 mass $u$ provides a per-node uncertainty:
 
-$$\hat{p}_k = \frac{\alpha^{a}_k}{S^{a}}, \qquad
-\hat{y} = \arg\max_{k}\, \alpha^{a}_k, \qquad
-u = \frac{K}{S^{a}}, \qquad S^{a} = \sum_k \alpha^{a}_k.$$
+$$\hat{p}_k = \frac{\alpha^{a}_k}{S^{a}}, \qquad \hat{y} = \arg\max_{k}\, \alpha^{a}_k, \qquad u = \frac{K}{S^{a}}, \qquad S^{a} = \sum_k \alpha^{a}_k.$$
 
 Predictions are read off the unlabeled set $\mathcal{U}$ and scored with
 accuracy and macro-F1.
