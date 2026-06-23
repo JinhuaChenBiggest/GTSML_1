@@ -28,12 +28,14 @@ Two backbones are provided:
 GTSML/
 ├── datasets/            # multi-view .mat datasets (X: views, y: labels)
 ├── src/
+│   ├── __init__.py
 │   ├── data.py          # .mat loading, normalization, graph building, split
 │   ├── model.py         # GraphConv, DS fusion, linear and GCN models
 │   ├── losses.py        # KL divergence, EDL digamma loss, total loss
 │   └── metrics.py       # accuracy and macro-F1
 ├── train.py             # training and evaluation entry point
 ├── requirements.txt
+├── LICENSE
 └── README.md
 ```
 
@@ -92,15 +94,18 @@ python train.py --dataset Handwritten --model linear --label_ratio 0.1
 
 ## Results (10% labels, unlabeled set, best Acc / F1)
 
-| Dataset | Linear (pre-GCN) | GCN (kNN graph) | GCN (native graph) |
-|---|---|---|---|
-| Handwritten | 0.9528 / 0.9529 | 0.9733 / 0.9733 | - |
-| ALOI | 0.7370 / 0.7102 | 0.8479 / 0.8430 | - |
-| OutdoorScene | 0.7991 / 0.7978 | 0.7859 / 0.7874 | - |
-| Cora | 0.5998 / 0.5832 | 0.7393 / 0.7321 | 0.7841 / 0.7708 |
-| CiteSeer | 0.5560 / 0.5243 | 0.5950 / 0.5376 | 0.6715 / 0.6170 |
+Mean over 3 runs with random labeled/unlabeled splits. The GCN uses the native
+citation graph for Cora/CiteSeer (`--graph_view 0`) and a kNN graph otherwise.
 
-Numbers may vary slightly across environments and seeds.
+| Dataset | GCN graph | Linear (no GCN) Acc / F1 | GCN Acc / F1 |
+|---|---|---|---|
+| Handwritten | kNN | 0.9561 / 0.9561 | 0.9730 / 0.9730 |
+| OutdoorScene | kNN | 0.7856 / 0.7848 | 0.7988 / 0.8012 |
+| ALOI | kNN | 0.7343 / 0.7112 | 0.8481 / 0.8430 |
+| Cora | native | 0.6323 / 0.6154 | 0.8047 / 0.7941 |
+| CiteSeer | native | 0.5519 / 0.5251 | 0.6631 / 0.6265 |
+
+Numbers may vary across environments and random splits.
 
 ## Method: I/O flow
 
