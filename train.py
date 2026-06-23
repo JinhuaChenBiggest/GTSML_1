@@ -50,14 +50,21 @@ def parse_args():
                         "(e.g. 0 for Cora/CiteSeer); -1 means build a kNN graph")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--eval_every", type=int, default=20)
-    p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--gpu", type=int, default=0, help="CUDA device index")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
     set_seed(args.seed)
-    device = torch.device(args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu")
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "This project requires a CUDA-capable GPU, but none is available. "
+            "Install a CUDA build of PyTorch and run on a machine with a GPU."
+        )
+    device = torch.device(f"cuda:{args.gpu}")
+    torch.cuda.set_device(device)
+    torch.cuda.manual_seed_all(args.seed)
 
     use_graph = args.model == "gcn"
     graph_view = args.graph_view if args.graph_view >= 0 else None
@@ -72,7 +79,7 @@ def main():
           f"| views={ds.num_views} | dims={ds.dims} | classes={ds.num_classes}{graph_desc}")
 
     labeled_idx, unlabeled_idx = semi_supervised_split(
-        ds.num_samples, ds.labels, args.label_ratio, seed=args.seed
+        ds.num_samples, ds.labels, args.label_ratio
     )
     labeled_idx = labeled_idx.to(device)
     unlabeled_idx = unlabeled_idx.to(device)

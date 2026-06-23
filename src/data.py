@@ -26,9 +26,9 @@ def _normalize_adj(adj):
     """Symmetric normalization: A_hat = D^{-1/2} (A + I) D^{-1/2}."""
     adj = adj + sp.eye(adj.shape[0])
     deg = np.asarray(adj.sum(axis=1)).flatten()
-    d_inv_sqrt = np.power(deg, -0.5, where=deg > 0)
+    with np.errstate(divide="ignore"):
+        d_inv_sqrt = np.power(deg, -0.5)
     d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.0
-    d_inv_sqrt[deg == 0] = 0.0
     d_mat = sp.diags(d_inv_sqrt)
     return (d_mat @ adj @ d_mat).tocoo()
 
@@ -147,20 +147,22 @@ class MultiViewDataset:
         return self
 
 
-def semi_supervised_split(num_samples, labels, label_ratio, seed=0):
+def semi_supervised_split(num_samples, labels, label_ratio):
     """Stratified semi-supervised split by ratio.
+
+    The split is intentionally unseeded so that every run draws an independent
+    random labeled subset.
 
     Args:
         num_samples: total number of samples.
         labels: (N,) label tensor used for stratified sampling.
         label_ratio: fraction of labeled samples over the whole dataset
             (e.g. 0.1 means 10%).
-        seed: random seed.
 
     Returns:
         (labeled_idx, unlabeled_idx): two LongTensor index tensors.
     """
-    rng = np.random.RandomState(seed)
+    rng = np.random.default_rng()
     y = labels.cpu().numpy()
     labeled_mask = np.zeros(num_samples, dtype=bool)
 

@@ -1,4 +1,6 @@
 numpy
 scipy
 scikit-learn
+# GPU-only: install a CUDA build of PyTorch, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
 torch
