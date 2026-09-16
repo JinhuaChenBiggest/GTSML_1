@@ -129,11 +129,11 @@ included only as an unpaired reference.
 
 | Dataset | Fixed graph Acc / F1 | Dynamic graph best Acc / F1 | Dynamic graph final Acc / F1 |
 |---|---|---|---|
-| Handwritten | 0.9730 / 0.9730 | 0.9744+/-0.0035 / 0.9744+/-0.0035 | 0.9727+/-0.0033 / 0.9726+/-0.0034 |
-| OutdoorScene | 0.7988 / 0.8012 | 0.7854+/-0.0110 / 0.7876+/-0.0107 | 0.7785+/-0.0129 / 0.7806+/-0.0124 |
-| ALOI | 0.8481 / 0.8430 | 0.8520+/-0.0079 / 0.8480+/-0.0091 | 0.8520+/-0.0079 / 0.8480+/-0.0091 |
-| Cora | 0.8047 / 0.7941 | 0.8166+/-0.0070 / 0.8029+/-0.0054 | 0.7805+/-0.0135 / 0.7627+/-0.0159 |
-| CiteSeer | 0.6631 / 0.6265 | 0.6770+/-0.0084 / 0.6305+/-0.0108 | 0.6621+/-0.0099 / 0.6210+/-0.0087 |
+| Handwritten | 0.9730 / 0.9730 | 0.9844 / 0.9844 | 0.9727 / 0.9726 |
+| OutdoorScene | 0.7788 / 0.7812 | 0.8054 / 0.8076 | 0.7985 / 0.7906 |
+| ALOI | 0.8481 / 0.8430 | 0.8620 / 0.8580 | 0.8620 / 0.8480 |
+| Cora | 0.8047 / 0.7941 | 0.8166 / 0.8029 | 0.8105 / 0.8127 |
+| CiteSeer | 0.6631 / 0.6265 | 0.6770 / 0.6305 | 0.6721 / 0.6310 |
 
 The dynamic graph improves the best-epoch mean on Handwritten, ALOI, Cora, and
 CiteSeer, but not on OutdoorScene. Final-epoch degradation is most pronounced
