@@ -15,6 +15,11 @@ to exploit unlabeled data.
   A two-layer GCN propagates features over the full graph (including unlabeled
   nodes), so unlabeled data shapes the learned representations through message
   passing. Evaluation predicts directly on the unlabeled set.
+- **Optional dynamic graph**: after a supervised warmup, sparse semantic
+  kNN graphs are periodically rebuilt from first-layer GCN embeddings and
+  blended with the immutable input graphs.
+- **Optional uncertainty gate**: within-view ranks of EDL confidence
+  scale newly created semantic edges without modifying the input graph.
 - **Loss**: EDL evidential cross-entropy in the digamma form with KL annealing.
 
 Two backbones are provided:
@@ -30,6 +35,7 @@ GTSML/
 ├── src/
 │   ├── __init__.py
 │   ├── data.py          # .mat loading, normalization, graph building, split
+│   ├── graph_refinement.py # sparse embedding kNN graph construction and blend
 │   ├── model.py         # GraphConv, DS fusion, linear and GCN models
 │   ├── losses.py        # KL divergence, EDL digamma loss, total loss
 │   └── metrics.py       # accuracy and macro-F1
@@ -73,6 +79,13 @@ python train.py --dataset Handwritten --model gcn --label_ratio 0.1
 python train.py --dataset Cora     --model gcn --label_ratio 0.1 --graph_view 0
 python train.py --dataset CiteSeer --model gcn --label_ratio 0.1 --graph_view 0
 
+# Hidden-representation dynamic graph
+python train.py --dataset OutdoorScene --model gcn --dynamic_graph
+python train.py --dataset Cora --model gcn --graph_view 0 --dynamic_graph
+
+# Optional rank-normalized uncertainty edge gate
+python train.py --dataset OutdoorScene --model gcn --dynamic_graph --uncertainty_edge_gate
+
 # Linear supervised baseline (pre-GCN)
 python train.py --dataset Handwritten --model linear --label_ratio 0.1
 ```
@@ -90,22 +103,41 @@ python train.py --dataset Handwritten --model linear --label_ratio 0.1
 | `--dropout` | `0.5` | GCN dropout |
 | `--epochs` | `300` | training epochs |
 | `--lr` | `3e-3` | learning rate |
+| `--seed` | `0` | model/NumPy/PyTorch seed; the labeled split remains independently random |
+| `--eval_every` | `20` | epochs between unlabeled-set evaluations |
+| `--dynamic_graph` | off | enable periodic semantic graph refinement |
+| `--graph_warmup` | `50` | fixed-graph epochs before the first update |
+| `--graph_update_every` | `20` | epochs between graph updates |
+| `--dynamic_knn_k` | `10` | neighbors in each hidden semantic graph |
+| `--base_graph_weight` | `0.8` | immutable input-graph weight in the blend |
+| `--uncertainty_edge_gate` | off | enable confidence gating on semantic edges |
+| `--uncertainty_floor` | `0.2` | minimum rank-normalized node confidence |
 | `--gpu` | `0` | CUDA device index |
 
-## Results (10% labels, unlabeled set, best Acc / F1)
+## Results
 
-Mean over 3 runs with random labeled/unlabeled splits. The GCN uses the native
-citation graph for Cora/CiteSeer (`--graph_view 0`) and a kNN graph otherwise.
+The final dynamic-graph configuration was evaluated for 300 epochs with 10%
+labeled samples. Results are the mean and sample standard deviation over five
+independent random labeled/unlabeled splits. Cora and CiteSeer use their native
+citation graph (`--graph_view 0`); the other datasets use cosine kNN graphs.
 
-| Dataset | GCN graph | Linear (no GCN) Acc / F1 | GCN Acc / F1 |
+`Best Acc` is selected from evaluations every 20 epochs, and the paired F1 is
+reported from the same epoch. Since this selection uses the unlabeled
+evaluation set, the final-epoch results are also shown as a selection-free
+reference. Fixed-graph values are the original three-run baselines and are
+included only as an unpaired reference.
+
+| Dataset | Fixed graph Acc / F1 | Dynamic graph best Acc / F1 | Dynamic graph final Acc / F1 |
 |---|---|---|---|
-| Handwritten | kNN | 0.9561 / 0.9561 | 0.9730 / 0.9730 |
-| OutdoorScene | kNN | 0.7856 / 0.7848 | 0.7988 / 0.8012 |
-| ALOI | kNN | 0.7343 / 0.7112 | 0.8481 / 0.8430 |
-| Cora | native | 0.6323 / 0.6154 | 0.8047 / 0.7941 |
-| CiteSeer | native | 0.5519 / 0.5251 | 0.6631 / 0.6265 |
+| Handwritten | 0.9730 / 0.9730 | 0.9744+/-0.0035 / 0.9744+/-0.0035 | 0.9727+/-0.0033 / 0.9726+/-0.0034 |
+| OutdoorScene | 0.7988 / 0.8012 | 0.7854+/-0.0110 / 0.7876+/-0.0107 | 0.7785+/-0.0129 / 0.7806+/-0.0124 |
+| ALOI | 0.8481 / 0.8430 | 0.8520+/-0.0079 / 0.8480+/-0.0091 | 0.8520+/-0.0079 / 0.8480+/-0.0091 |
+| Cora | 0.8047 / 0.7941 | 0.8166+/-0.0070 / 0.8029+/-0.0054 | 0.7805+/-0.0135 / 0.7627+/-0.0159 |
+| CiteSeer | 0.6631 / 0.6265 | 0.6770+/-0.0084 / 0.6305+/-0.0108 | 0.6621+/-0.0099 / 0.6210+/-0.0087 |
 
-Numbers may vary across environments and random splits.
+The dynamic graph improves the best-epoch mean on Handwritten, ALOI, Cora, and
+CiteSeer, but not on OutdoorScene. Final-epoch degradation is most pronounced
+on Cora. Graph refinement is therefore optional rather than enabled by default.
 
 ## Method: I/O flow
 
@@ -117,9 +149,10 @@ there be $N$ samples, $V$ views, and $K$ classes.
 View $v$ provides a feature matrix $X^{(v)} \in \mathbb{R}^{N \times d_v}$, and
 labels are $y \in \{0,\dots,K-1\}^{N}$. Each view is standardized per feature
 (zero mean, unit variance). The index set is partitioned into a labeled subset
-$\mathcal{L}$ and an unlabeled subset $\mathcal{U}$, where
-$|\mathcal{L}| = \lceil r N \rceil$ for a label ratio $r$ (e.g. $r=0.1$). The
-loss uses $\mathcal{L}$ only; evaluation is performed on $\mathcal{U}$.
+$\mathcal{L}$ and an unlabeled subset $\mathcal{U}$. For each class $c$, the
+split samples $\max(1,\mathrm{round}(rN_c))$ labeled nodes, where $r$ is the
+label ratio (e.g. $r=0.1$). The loss uses $\mathcal{L}$ only; evaluation is
+performed on $\mathcal{U}$.
 
 ### 2. Graph construction (for non-graph datasets)
 
@@ -133,7 +166,49 @@ For native-graph datasets (Cora, CiteSeer), the citation adjacency stored in
 view 0 is used directly (normalized the same way) and shared by the remaining
 feature views.
 
-### 3. Forward propagation
+### 3. Hidden-representation graph refinement
+
+Dynamic refinement keeps each normalized input graph $\hat A_0^{(v)}$ as an
+immutable anchor. After the warmup, deterministic first-layer embeddings are
+extracted without dropout:
+
+$$H_t^{(v)} = \mathrm{ReLU}\!\left(\hat A_t^{(v)}X^{(v)}W_1^{(v)}\right).$$
+
+A sparse cosine kNN graph is built from each $H_t^{(v)}$. Its directed edges
+are assigned non-negative cosine similarities, symmetrized, given self-loops,
+and normalized into $\hat A_{\mathrm{sem},t}^{(v)}$. The propagation graph for
+subsequent epochs is
+
+$$\hat A_{t+1}^{(v)} = \beta\hat A_0^{(v)} + (1-\beta)\hat A_{\mathrm{sem},t}^{(v)}.$$
+
+Graph construction runs outside autograd and retains only sparse top-k edges;
+it never creates an $N\times N$ dense similarity tensor. Native citation graphs
+remain the anchor for Cora/CiteSeer rather than being replaced. Setting
+`base_graph_weight` to 1 recovers the fixed graph exactly.
+
+### 4. Uncertainty edge gate
+
+For each view, the optional edge gate computes raw node confidence from its own
+evidence:
+
+$$c_i^{(v)} = 1-u_i^{(v)}, \qquad u_i^{(v)}=\frac{K}{\sum_k\alpha_{ik}^{(v)}}.$$
+
+Raw confidence is converted to an empirical within-view rank $r_i^{(v)}$ and
+mapped into a bounded gate:
+
+$$\tilde c_i^{(v)}=c_{\min}+(1-c_{\min})r_i^{(v)}.$$
+
+This preserves uncertainty ordering while avoiding the class-count scale
+problem observed with raw confidence on ALOI. Before semantic-graph
+normalization, each new edge is scaled by its endpoint geometric mean:
+
+$$w_{ij}^{(v)} \leftarrow w_{ij}^{(v)}
+\sqrt{\tilde c_i^{(v)}\tilde c_j^{(v)}}.$$
+
+Only semantic edges are gated; original kNN or citation edges remain unchanged.
+The gate is recomputed outside autograd at every scheduled graph update.
+
+### 5. Forward propagation
 
 Per view, a two-layer GCN runs over the full graph (all $N$ nodes, including
 unlabeled ones):
@@ -148,7 +223,7 @@ Each view yields a subjective opinion (belief masses and an uncertainty mass):
 
 $$S^{(v)} = \sum_{k=1}^{K}\alpha^{(v)}_k, \qquad b^{(v)}_k = \frac{e^{(v)}_k}{S^{(v)}}, \qquad u^{(v)} = \frac{K}{S^{(v)}}, \qquad \sum_{k} b^{(v)}_k + u^{(v)} = 1.$$
 
-### 4. Multi-view fusion (Dempster-Shafer)
+### 6. Multi-view fusion (Dempster-Shafer)
 
 Two opinions $(b^{1}, u^{1})$ and $(b^{2}, u^{2})$ are combined by
 
@@ -159,7 +234,7 @@ views gives a fused opinion, from which the fused Dirichlet is recovered:
 
 $$S = \frac{K}{u}, \qquad \hat{e}_k = b_k\, S, \qquad \alpha^{a} = \hat{e} + 1.$$
 
-### 5. Loss (labeled nodes only)
+### 7. Loss (labeled nodes only)
 
 For a node with one-hot label $\mathbf{y}$ and Dirichlet parameter $\alpha$, the
 EDL digamma cross-entropy and its annealed KL regularizer are
@@ -181,7 +256,7 @@ features from unlabeled nodes into labeled-node representations, so unlabeled
 data shapes the parameters through message passing. This is the semi-supervised
 learning signal.
 
-### 6. Output and prediction
+### 8. Output and prediction
 
 The model outputs the fused Dirichlet $\alpha^{a} \in \mathbb{R}^{N \times K}$.
 The class probability is its mean and the predicted label is the argmax; the

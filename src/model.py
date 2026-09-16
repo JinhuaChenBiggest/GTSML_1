@@ -122,6 +122,13 @@ class EDLMultiViewGCN(nn.Module):
             [GraphConv(hidden, num_classes) for _ in dims]
         )
 
+    def encode(self, views, adjs):
+        """Return deterministic first-layer embeddings for graph refinement."""
+        return [
+            F.relu(self.gc1[v](views[v], adjs[v]))
+            for v in range(self.num_views)
+        ]
+
     def forward(self, views, adjs):
         evidences = []
         for v in range(self.num_views):
