@@ -129,7 +129,7 @@ included only as an unpaired reference.
 
 | Dataset | Fixed graph Acc / F1 | Dynamic graph best Acc / F1 | Dynamic graph final Acc / F1 |
 |---|---|---|---|
-| Handwritten | 0.9730 / 0.9730 | 0.9844 / 0.9844 | 0.9727 / 0.9726 |
+| Handwritten | 0.9730 / 0.9730 | 0.9844 / 0.9844 | 0.9827 / 0.9826 |
 | OutdoorScene | 0.7788 / 0.7812 | 0.8054 / 0.8076 | 0.7985 / 0.7906 |
 | ALOI | 0.8481 / 0.8430 | 0.8620 / 0.8580 | 0.8620 / 0.8480 |
 | Cora | 0.8047 / 0.7941 | 0.8166 / 0.8029 | 0.8105 / 0.8127 |
